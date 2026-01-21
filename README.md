@@ -1,5 +1,7 @@
 # 🚀 Gerador de Relatórios Meta Ads com IA (Gemini)
 
+[🔗 Acesse o App aqui](https://seu-projeto.vercel.app).
+
 Este é um Web App moderno construído com **Next.js 15**, **Tailwind CSS** e a **API do Google Gemini**, projetado para transformar exportações de dados brutas do Meta Ads (CSV) em relatórios de desempenho formatados e prontos para envio via WhatsApp.
 
 ## ✨ Funcionalidades
@@ -28,7 +30,7 @@ Este é um Web App moderno construído com **Next.js 15**, **Tailwind CSS** e a 
 
 1.  Clone o repositório:
     ```bash
-    git clone [https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git](https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git)
+    git clone [https://github.com/wagnerazvdo/gerador-relatorio-metaads.git](https://github.com/wagnerazvdo/gerador-relatorio-metaads.git)
     cd NOME_DO_REPOSITORIO
     ```
 
