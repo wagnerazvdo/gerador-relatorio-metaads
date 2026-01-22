@@ -73,6 +73,7 @@ export default function GeradorRelatorios() {
         3. Layout: Siga exatamente o modelo abaixo:
 
         🔹 Relatório de Desempenho da Campanha
+        
         📌 Campanha: [NOME DA CAMPANHA]
         📅 Data: ${dataFormatada}
         🎯 Objetivo: [Se o nome tiver MSG é Geração de conversas, se tiver REC é Alcance]
