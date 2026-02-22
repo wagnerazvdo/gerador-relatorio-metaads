@@ -1,6 +1,6 @@
 "use client";
-import React, { useState } from 'react';
 import Papa from 'papaparse';
+import React, { useState } from 'react';
 
 export default function GeradorRelatorios() {
   const [dataRelatorio, setDataRelatorio] = useState('');
@@ -120,6 +120,7 @@ export default function GeradorRelatorios() {
         Efetividade: [1 frase de análise]
         
         Recomendações: [2 tópicos curtos]
+        ⚠️ IMPORTANTE: Separe cada relatório de campanha usando exatamente a palavra: [DIVIDER]
         ---
         DADOS EM JSON:
         ${JSON.stringify(dados)}
@@ -181,16 +182,37 @@ export default function GeradorRelatorios() {
           )}
 
           {resultadoFinal && !loading && (
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-4 bg-gray-50 p-3 rounded-lg">
-                <h2 className="text-lg font-black text-gray-800 uppercase">Relatórios Gerados ✨</h2>
-                <button onClick={handleCopy} className={`px-6 py-2 rounded-xl text-sm font-black transition-all ${copiado ? 'bg-green-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                  {copiado ? '✅ COPIADO!' : '📋 COPIAR TUDO'}
+            <div className="mt-8 space-y-6">
+              <div className="flex items-center justify-between mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <h2 className="text-lg font-black text-gray-800 uppercase tracking-tight">Relatórios Gerados ✅</h2>
+                <button 
+                  onClick={handleCopy}
+                  className={`px-6 py-2 rounded-xl text-sm font-black transition-all transform active:scale-95 shadow-md ${
+                    copiado ? 'bg-green-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {copiado ? '✅ COPIADO TUDO!' : '📋 COPIAR TUDO'}
                 </button>
               </div>
-              <div className="bg-gray-50 rounded-2xl p-6 text-gray-800 font-medium text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner border-2 border-gray-200">
-                {resultadoFinal}
-              </div>
+
+              {resultadoFinal.split('[DIVIDER]').filter(res => res.trim() !== "").map((relatorio, index) => (
+                <div key={index} className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="bg-gray-50 px-6 py-3 border-b-2 border-gray-200 flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Relatório #{index + 1}</span>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(relatorio.trim());
+                      }}
+                      className="text-xs font-bold bg-gray-200 hover:bg-blue-600 hover:text-white text-gray-700 px-3 py-1 rounded-lg transition-all"
+                    >
+                      📋 COPIAR
+                    </button>
+                  </div>
+                  <div className="p-6 text-gray-800 font-medium text-sm whitespace-pre-wrap leading-relaxed">
+                    {relatorio.trim()}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
