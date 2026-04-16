@@ -51,17 +51,9 @@ export default function GeradorRelatorios() {
   const enviarParaGemini = async (dados: any[]) => {
     setLoading(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GROQ_KEY;
       const dataFormatada = formatarDataBR(dataRelatorio);
       
-      const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-      const listRes = await fetch(listUrl);
-      const listData = await listRes.json();
-      
-      const modelDisponivel = listData.models.find((m: any) =>
-        m.supportedGenerationMethods.includes("generateContent")
-      ).name;
-
       const prompt = `
         Atue como um analista de tráfego pago. Gere relatórios individuais para cada campanha com gasto.
         Data do Relatório: ${dataFormatada}
@@ -126,23 +118,69 @@ export default function GeradorRelatorios() {
         ${JSON.stringify(dados)}
       `;
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/${modelDisponivel}:generateContent?key=${apiKey}`;
+      // Lista de modelos Groq em ordem de preferência (do mais capaz para o mais rápido)
+      const modelos = [
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant'
+      ];
 
-      const chamarIAComRetry = async (tentativas = 3): Promise<string> => {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const resData = await response.json();
-        if (resData.error) {
-          if (resData.error.message.includes("overloaded") && tentativas > 0) {
-            await new Promise(r => setTimeout(r, 3000));
-            return chamarIAComRetry(tentativas - 1);
-          }
-          throw new Error(resData.error.message);
+      const chamarIAComRetry = async (tentativas = 3, modeloIndex = 0): Promise<string> => {
+        if (modeloIndex >= modelos.length) {
+          throw new Error('Todos os modelos estão indisponíveis no momento. Tente novamente mais tarde.');
         }
-        return resData.candidates[0].content.parts[0].text;
+
+        const modeloAtual = modelos[modeloIndex];
+        const url = `https://api.groq.com/openai/v1/chat/completions`;
+
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({ 
+              model: modeloAtual,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.7,
+              max_tokens: 4000
+            })
+          });
+          
+          const resData = await response.json();
+          
+          if (resData.error) {
+            console.log(`Erro no modelo ${modeloAtual}:`, resData.error.message);
+            
+            // Se for erro de sobrecarga ou limite, tenta o próximo modelo
+            if (resData.error.message.includes("overloaded") || 
+                resData.error.message.includes("rate_limit") ||
+                resData.error.message.includes("capacity") ||
+                resData.error.type === "invalid_request_error") {
+              console.log(`Tentando próximo modelo: ${modelos[modeloIndex + 1]}`);
+              return chamarIAComRetry(tentativas, modeloIndex + 1);
+            }
+            
+            // Se for outro erro e ainda tem tentativas, espera e tenta o mesmo modelo
+            if (tentativas > 0) {
+              await new Promise(r => setTimeout(r, 3000));
+              return chamarIAComRetry(tentativas - 1, modeloIndex);
+            }
+            
+            throw new Error(resData.error.message);
+          }
+          
+          return resData.choices[0].message.content;
+        } catch (error: any) {
+          console.log(`Erro de rede no modelo ${modeloAtual}:`, error.message);
+          
+          if (modeloIndex < modelos.length - 1) {
+            console.log(`Tentando próximo modelo: ${modelos[modeloIndex + 1]}`);
+            return chamarIAComRetry(tentativas, modeloIndex + 1);
+          }
+          
+          throw error;
+        }
       };
 
       const texto = await chamarIAComRetry();
