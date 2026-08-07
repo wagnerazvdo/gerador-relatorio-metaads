@@ -1,11 +1,11 @@
 "use client";
-import Papa from 'papaparse';
-import React, { useState } from 'react';
+import Papa from "papaparse";
+import React, { useState } from "react";
 
 export default function GeradorRelatorios() {
-  const [dataRelatorio, setDataRelatorio] = useState('');
+  const [dataRelatorio, setDataRelatorio] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resultadoFinal, setResultadoFinal] = useState('');
+  const [resultadoFinal, setResultadoFinal] = useState("");
   const [copiado, setCopiado] = useState(false);
 
   const formatarDataBR = (dataString: string) => {
@@ -34,15 +34,14 @@ export default function GeradorRelatorios() {
       complete: async (results) => {
         const getValorGasto = (linha: Record<string, string>) => {
           const raw =
-            linha["Valor usado (BRL)"] ??
-            linha["Valor gasto (BRL)"] ??
-            "0";
+            linha["Valor usado (BRL)"] ?? linha["Valor gasto (BRL)"] ?? "0";
           return parseFloat(String(raw).replace(",", "."));
         };
 
-        const dadosFiltrados = results.data.filter((linha: any) =>
-          linha["Início dos relatórios"] === dataRelatorio &&
-          getValorGasto(linha) > 0
+        const dadosFiltrados = results.data.filter(
+          (linha: any) =>
+            linha["Início dos relatórios"] === dataRelatorio &&
+            getValorGasto(linha) > 0,
         );
 
         if (dadosFiltrados.length === 0) {
@@ -52,7 +51,7 @@ export default function GeradorRelatorios() {
         }
 
         enviarParaGemini(dadosFiltrados);
-      }
+      },
     });
   };
 
@@ -61,7 +60,7 @@ export default function GeradorRelatorios() {
     try {
       const apiKey = process.env.NEXT_PUBLIC_GROQ_KEY;
       const dataFormatada = formatarDataBR(dataRelatorio);
-      
+
       const prompt = `
         Atue como um analista de tráfego pago. Gere relatórios individuais para cada campanha com gasto.
         Data do Relatório: ${dataFormatada}
@@ -127,14 +126,16 @@ export default function GeradorRelatorios() {
       `;
 
       // Lista de modelos Groq em ordem de preferência (do mais capaz para o mais rápido)
-      const modelos = [
-        'llama-3.3-70b-versatile',
-        'llama-3.1-8b-instant'
-      ];
+      const modelos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
-      const chamarIAComRetry = async (tentativas = 3, modeloIndex = 0): Promise<string> => {
+      const chamarIAComRetry = async (
+        tentativas = 3,
+        modeloIndex = 0,
+      ): Promise<string> => {
         if (modeloIndex >= modelos.length) {
-          throw new Error('Todos os modelos estão indisponíveis no momento. Tente novamente mais tarde.');
+          throw new Error(
+            "Todos os modelos estão indisponíveis no momento. Tente novamente mais tarde.",
+          );
         }
 
         const modeloAtual = modelos[modeloIndex];
@@ -142,51 +143,58 @@ export default function GeradorRelatorios() {
 
         try {
           const response = await fetch(url, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               model: modeloAtual,
-              messages: [{ role: 'user', content: prompt }],
+              messages: [{ role: "user", content: prompt }],
               temperature: 0.7,
-              max_tokens: 4000
-            })
+              max_tokens: 4000,
+            }),
           });
-          
+
           const resData = await response.json();
-          
+
           if (resData.error) {
-            console.log(`Erro no modelo ${modeloAtual}:`, resData.error.message);
-            
+            console.log(
+              `Erro no modelo ${modeloAtual}:`,
+              resData.error.message,
+            );
+
             // Se for erro de sobrecarga ou limite, tenta o próximo modelo
-            if (resData.error.message.includes("overloaded") || 
-                resData.error.message.includes("rate_limit") ||
-                resData.error.message.includes("capacity") ||
-                resData.error.type === "invalid_request_error") {
-              console.log(`Tentando próximo modelo: ${modelos[modeloIndex + 1]}`);
+            if (
+              resData.error.message.includes("overloaded") ||
+              resData.error.message.includes("rate_limit") ||
+              resData.error.message.includes("capacity") ||
+              resData.error.type === "invalid_request_error"
+            ) {
+              console.log(
+                `Tentando próximo modelo: ${modelos[modeloIndex + 1]}`,
+              );
               return chamarIAComRetry(tentativas, modeloIndex + 1);
             }
-            
+
             // Se for outro erro e ainda tem tentativas, espera e tenta o mesmo modelo
             if (tentativas > 0) {
-              await new Promise(r => setTimeout(r, 3000));
+              await new Promise((r) => setTimeout(r, 3000));
               return chamarIAComRetry(tentativas - 1, modeloIndex);
             }
-            
+
             throw new Error(resData.error.message);
           }
-          
+
           return resData.choices[0].message.content;
         } catch (error: any) {
           console.log(`Erro de rede no modelo ${modeloAtual}:`, error.message);
-          
+
           if (modeloIndex < modelos.length - 1) {
             console.log(`Tentando próximo modelo: ${modelos[modeloIndex + 1]}`);
             return chamarIAComRetry(tentativas, modeloIndex + 1);
           }
-          
+
           throw error;
         }
       };
@@ -205,60 +213,91 @@ export default function GeradorRelatorios() {
       <div className="max-w-3xl mx-auto text-gray-800">
         <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
           <header className="text-center mb-10">
-            <h1 className="text-3xl font-extrabold text-gray-900 mb-2">🚀 Gerador de Relatórios Meta</h1>
-            <p className="text-gray-600 font-medium italic">Análise inteligente (SITE & MSG)</p>
+            <h1 className="text-3xl font-extrabold text-gray-900 mb-2">
+              🚀 Gerador de Relatórios Meta
+            </h1>
+            <p className="text-gray-600 font-medium italic">
+              Análise inteligente (SITE, REC & MSG)
+            </p>
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">1. Selecione a Data</label>
-              <input type="date" className="w-full p-4 rounded-xl border-2 border-gray-300 font-semibold focus:border-blue-600 outline-none transition-all shadow-sm" onChange={(e) => setDataRelatorio(e.target.value)} />
+              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                1. Selecione a Data
+              </label>
+              <input
+                type="date"
+                className="w-full p-4 rounded-xl border-2 border-gray-300 font-semibold focus:border-blue-600 outline-none transition-all shadow-sm"
+                onChange={(e) => setDataRelatorio(e.target.value)}
+              />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">2. Upload do CSV</label>
-              <input type="file" accept=".csv" className="block w-full text-sm text-gray-500 file:mr-4 file:py-4 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer shadow-sm" onChange={processarCSV} />
+              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                2. Upload do CSV
+              </label>
+              <input
+                type="file"
+                accept=".csv"
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-4 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer shadow-sm"
+                onChange={processarCSV}
+              />
             </div>
           </div>
 
           {loading && (
             <div className="flex flex-col items-center justify-center py-16 space-y-6">
               <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-b-blue-600"></div>
-              <p className="text-blue-700 font-bold text-lg animate-pulse text-center">IA identificando campanhas e gerando relatórios...</p>
+              <p className="text-blue-700 font-bold text-lg animate-pulse text-center">
+                IA identificando campanhas e gerando relatórios...
+              </p>
             </div>
           )}
 
           {resultadoFinal && !loading && (
             <div className="mt-8 space-y-6">
               <div className="flex items-center justify-between mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <h2 className="text-lg font-black text-gray-800 uppercase tracking-tight">Relatórios Gerados ✅</h2>
-                <button 
+                <h2 className="text-lg font-black text-gray-800 uppercase tracking-tight">
+                  Relatórios Gerados ✅
+                </h2>
+                <button
                   onClick={handleCopy}
                   className={`px-6 py-2 rounded-xl text-sm font-black transition-all transform active:scale-95 shadow-md ${
-                    copiado ? 'bg-green-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
+                    copiado
+                      ? "bg-green-500 text-white"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
                   }`}
                 >
-                  {copiado ? '✅ COPIADO TUDO!' : '📋 COPIAR TUDO'}
+                  {copiado ? "✅ COPIADO TUDO!" : "📋 COPIAR TUDO"}
                 </button>
               </div>
 
-              {resultadoFinal.split('[DIVIDER]').filter(res => res.trim() !== "").map((relatorio, index) => (
-                <div key={index} className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="bg-gray-50 px-6 py-3 border-b-2 border-gray-200 flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Relatório #{index + 1}</span>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(relatorio.trim());
-                      }}
-                      className="text-xs font-bold bg-gray-200 hover:bg-blue-600 hover:text-white text-gray-700 px-3 py-1 rounded-lg transition-all"
-                    >
-                      📋 COPIAR
-                    </button>
+              {resultadoFinal
+                .split("[DIVIDER]")
+                .filter((res) => res.trim() !== "")
+                .map((relatorio, index) => (
+                  <div
+                    key={index}
+                    className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500"
+                  >
+                    <div className="bg-gray-50 px-6 py-3 border-b-2 border-gray-200 flex justify-between items-center">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        Relatório #{index + 1}
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(relatorio.trim());
+                        }}
+                        className="text-xs font-bold bg-gray-200 hover:bg-blue-600 hover:text-white text-gray-700 px-3 py-1 rounded-lg transition-all"
+                      >
+                        📋 COPIAR
+                      </button>
+                    </div>
+                    <div className="p-6 text-gray-800 font-medium text-sm whitespace-pre-wrap leading-relaxed">
+                      {relatorio.trim()}
+                    </div>
                   </div>
-                  <div className="p-6 text-gray-800 font-medium text-sm whitespace-pre-wrap leading-relaxed">
-                    {relatorio.trim()}
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
         </div>
