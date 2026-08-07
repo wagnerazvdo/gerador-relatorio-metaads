@@ -32,9 +32,17 @@ export default function GeradorRelatorios() {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
-        const dadosFiltrados = results.data.filter((linha: any) => 
-          linha["Início dos relatórios"] === dataRelatorio && 
-          parseFloat(linha["Valor usado (BRL)"]) > 0
+        const getValorGasto = (linha: Record<string, string>) => {
+          const raw =
+            linha["Valor usado (BRL)"] ??
+            linha["Valor gasto (BRL)"] ??
+            "0";
+          return parseFloat(String(raw).replace(",", "."));
+        };
+
+        const dadosFiltrados = results.data.filter((linha: any) =>
+          linha["Início dos relatórios"] === dataRelatorio &&
+          getValorGasto(linha) > 0
         );
 
         if (dadosFiltrados.length === 0) {
