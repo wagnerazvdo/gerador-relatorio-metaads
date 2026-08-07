@@ -45,7 +45,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="pb-12">{children}</div>
+        <div className="pb-8">{children}</div>
         <footer className="fixed bottom-0 inset-x-0 z-50 py-3 text-center text-xs text-gray-500 bg-gray-100/90 backdrop-blur-sm border-t border-gray-200">
           v{version} · {gitSha} · build {buildTime}
         </footer>
