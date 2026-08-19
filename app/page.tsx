@@ -2,6 +2,48 @@
 import Papa from "papaparse";
 import React, { useState } from "react";
 
+const COLUNA_UTIL =
+  /nome da campanha|valor usado|valor gasto|resultados|indicador de resultados|custo por|cliques|alcance|impress|frequ[eê]ncia|cpm|cpc|ctr|compras|conversas/i;
+
+const LIMITE_TPM = 8000;
+const MARGEM_TPM = 400;
+
+function textoCelula(valor: unknown) {
+  if (typeof valor === "string") return valor.trim();
+  if (typeof valor === "number" || typeof valor === "boolean") {
+    return String(valor);
+  }
+  return "";
+}
+
+function compactarCampanhas(linhas: Record<string, unknown>[]) {
+  return linhas.map((linha) => {
+    const compacta: Record<string, string> = {};
+    for (const [chave, valor] of Object.entries(linha)) {
+      const texto = textoCelula(valor);
+      if (!texto) continue;
+      if (COLUNA_UTIL.test(chave)) compacta[chave] = texto;
+    }
+    if (Object.keys(compacta).length === 0) {
+      for (const [chave, valor] of Object.entries(linha)) {
+        const texto = textoCelula(valor);
+        if (texto) compacta[chave] = texto;
+      }
+    }
+    return compacta;
+  });
+}
+
+function estimarTokens(texto: string) {
+  return Math.ceil(texto.length / 3);
+}
+
+function maxCompletionPara(qtdCampanhas: number) {
+  return Math.min(3500, Math.max(1200, qtdCampanhas * 400));
+}
+
+class GroqApiError extends Error {}
+
 export default function GeradorRelatorios() {
   const [dataRelatorio, setDataRelatorio] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,8 +102,10 @@ export default function GeradorRelatorios() {
     try {
       const apiKey = process.env.NEXT_PUBLIC_GROQ_KEY;
       const dataFormatada = formatarDataBR(dataRelatorio);
+      const campanhas = compactarCampanhas(dados);
 
-      const prompt = `
+      const montarPrompt = (lote: Record<string, string>[]) =>
+        `
         Atue como um analista de tráfego pago. Gere relatórios individuais para cada campanha com gasto.
         Data do Relatório: ${dataFormatada}
 
@@ -122,13 +166,34 @@ export default function GeradorRelatorios() {
         ⚠️ IMPORTANTE: Separe cada relatório de campanha usando exatamente a palavra: [DIVIDER]
         ---
         DADOS EM JSON:
-        ${JSON.stringify(dados)}
-      `;
+        ${JSON.stringify(lote)}
+      `.replace(/^[ \t]+/gm, "").trim();
 
-      // Lista de modelos Groq em ordem de preferência (do mais capaz para o mais rápido)
+      const fatiarLotes = (lista: Record<string, string>[]) => {
+        const lotes: Record<string, string>[][] = [];
+        let atual: Record<string, string>[] = [];
+
+        for (const campanha of lista) {
+          const candidato = [...atual, campanha];
+          const estimado =
+            estimarTokens(montarPrompt(candidato)) +
+            maxCompletionPara(candidato.length);
+          if (atual.length > 0 && estimado > LIMITE_TPM - MARGEM_TPM) {
+            lotes.push(atual);
+            atual = [campanha];
+          } else {
+            atual = candidato;
+          }
+        }
+        if (atual.length) lotes.push(atual);
+        return lotes;
+      };
+
       const modelos = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 
       const chamarIAComRetry = async (
+        prompt: string,
+        maxCompletionTokens: number,
         tentativas = 3,
         modeloIndex = 0,
       ): Promise<string> => {
@@ -152,7 +217,7 @@ export default function GeradorRelatorios() {
               model: modeloAtual,
               messages: [{ role: "user", content: prompt }],
               temperature: 0.7,
-              max_completion_tokens: 8192,
+              max_completion_tokens: maxCompletionTokens,
               reasoning_effort: "low",
             }),
           });
@@ -160,48 +225,87 @@ export default function GeradorRelatorios() {
           const resData = await response.json();
 
           if (resData.error) {
-            console.log(
-              `Erro no modelo ${modeloAtual}:`,
-              resData.error.message,
-            );
+            const mensagem = String(resData.error.message ?? "");
+            console.log(`Erro no modelo ${modeloAtual}:`, mensagem);
 
-            // Se for erro de sobrecarga ou limite, tenta o próximo modelo
-            if (
-              resData.error.message.includes("overloaded") ||
-              resData.error.message.includes("rate_limit") ||
-              resData.error.message.includes("capacity") ||
-              resData.error.type === "invalid_request_error"
-            ) {
+            const isTpm =
+              /too large|tokens per minute|TPM|reduce your message size/i.test(
+                mensagem,
+              );
+            const isCapacidade =
+              /overloaded|capacity|rate_limit/i.test(mensagem) && !isTpm;
+
+            if (isTpm && tentativas > 0) {
+              await new Promise((r) => setTimeout(r, 20000));
+              return chamarIAComRetry(
+                prompt,
+                maxCompletionTokens,
+                tentativas - 1,
+                modeloIndex,
+              );
+            }
+
+            if (isCapacidade) {
               console.log(
                 `Tentando próximo modelo: ${modelos[modeloIndex + 1]}`,
               );
-              return chamarIAComRetry(tentativas, modeloIndex + 1);
+              return chamarIAComRetry(
+                prompt,
+                maxCompletionTokens,
+                tentativas,
+                modeloIndex + 1,
+              );
             }
 
-            // Se for outro erro e ainda tem tentativas, espera e tenta o mesmo modelo
             if (tentativas > 0) {
               await new Promise((r) => setTimeout(r, 3000));
-              return chamarIAComRetry(tentativas - 1, modeloIndex);
+              return chamarIAComRetry(
+                prompt,
+                maxCompletionTokens,
+                tentativas - 1,
+                modeloIndex,
+              );
             }
 
-            throw new Error(resData.error.message);
+            throw new GroqApiError(mensagem);
           }
 
           return resData.choices[0].message.content;
         } catch (error: any) {
+          if (error instanceof GroqApiError) throw error;
+
           console.log(`Erro de rede no modelo ${modeloAtual}:`, error.message);
 
           if (modeloIndex < modelos.length - 1) {
             console.log(`Tentando próximo modelo: ${modelos[modeloIndex + 1]}`);
-            return chamarIAComRetry(tentativas, modeloIndex + 1);
+            return chamarIAComRetry(
+              prompt,
+              maxCompletionTokens,
+              tentativas,
+              modeloIndex + 1,
+            );
           }
 
           throw error;
         }
       };
 
-      const texto = await chamarIAComRetry();
-      setResultadoFinal(texto);
+      const lotes = fatiarLotes(campanhas);
+      const partes: string[] = [];
+
+      for (let i = 0; i < lotes.length; i++) {
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 20000));
+        }
+        const prompt = montarPrompt(lotes[i]);
+        const textoLote = await chamarIAComRetry(
+          prompt,
+          maxCompletionPara(lotes[i].length),
+        );
+        partes.push(textoLote.trim());
+      }
+
+      setResultadoFinal(partes.join("\n[DIVIDER]\n"));
     } catch (error: any) {
       alert("Erro: " + error.message);
     } finally {
