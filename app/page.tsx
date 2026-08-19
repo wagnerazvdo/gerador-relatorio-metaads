@@ -126,7 +126,7 @@ export default function GeradorRelatorios() {
       `;
 
       // Lista de modelos Groq em ordem de preferência (do mais capaz para o mais rápido)
-      const modelos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+      const modelos = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 
       const chamarIAComRetry = async (
         tentativas = 3,
@@ -152,7 +152,8 @@ export default function GeradorRelatorios() {
               model: modeloAtual,
               messages: [{ role: "user", content: prompt }],
               temperature: 0.7,
-              max_tokens: 4000,
+              max_completion_tokens: 8192,
+              reasoning_effort: "low",
             }),
           });
 
